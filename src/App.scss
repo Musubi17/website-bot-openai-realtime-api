@@ -1,0 +1,131 @@
+.app-container {
+  position: relative;
+  min-height: 100vh;
+
+  height: 100%;
+  width: 100%;
+  position: relative;
+  background-color: #362b2b;  
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+
+  .content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 60px;
+  }
+  .event-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+
+    p {
+      margin-top: 20px;
+    }
+
+    .custom-datetime-picker {
+    background: white;
+    border-radius: 4px;
+    padding: 2px 5px;
+    
+    .react-datetime-picker__wrapper {
+      border: none;
+      padding: 5px;
+    }
+
+    .react-datetime-picker__inputGroup {
+      input {
+        color: black;
+        &::placeholder {
+          color: #666;
+        }
+      }
+      
+      select {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background: transparent;
+        color: black;
+      }
+
+      span {
+        color: black;
+      }
+    }
+
+    .react-datetime-picker__button {
+      display: none;
+    }
+
+    .react-datetime-picker__calendar {
+      width: 350px;
+      
+      .react-calendar {
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        
+        button {
+          color: black;
+        }
+        
+        .react-calendar__tile--active {
+          background: #f8f82b;
+          color: black;
+        }
+        
+        .react-calendar__tile--now {
+          background: #f0f0f0;
+        }
+      }
+    }
+  }
+
+
+  }
+  .sign-out-button-container {
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  .sign-out-button {
+    position: fixed; // Изменяем на fixed
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%); // Центрируем кнопку
+    padding: 10px 20px;
+    font-size: 16px;
+    color: black;
+    background-color: #f8f82b;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: 0.5s ease;
+
+    &:hover {
+      box-shadow: 0 0 15px rgba(255, 238, 0, 0.59);
+    }
+
+    &:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+  
+    }
+  }
+}
