@@ -9,7 +9,6 @@ import { WavRenderer } from '../utils/wav_renderer';
 
 import { X, Edit, Zap } from 'react-feather';
 import { Button } from '../components/button/Button';
-import DateTimePicker from 'react-datetime-picker';
 
 import './VoiceChat.scss';
 
@@ -17,7 +16,10 @@ type Props = {
   scrapedContent: string;
 };
 
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
+
 export const VoiceChat: React.FC<Props> = ({ scrapedContent }) => {
+  const supabase = useSupabaseClient();
   const apiKey = USE_LOCAL_RELAY_SERVER_URL
     ? ''
     : localStorage.getItem('tmp::voice_api_key') ||
@@ -36,11 +38,16 @@ INSTRUCTIONS:
 - Your response should be concise and to the point, keep it short, less than 200 characters max.
 - You can ask the user questions
 - Be open to exploration and conversation
+- When mentioning dates and days of the week, ALWAYS verify the current date first
+- Use Date.now() as reference point for all date calculations
+- Double check all calendar dates and days of the week before confirming them
+- If user mentions a day of week (like "Saturday"), calculate the exact date for the nearest occurrence of that day
 
 ------
 PERSONALITY:
 - Be upbeat and genuine
 - Speak FAST as if excited
+- Be precise with dates and times
 
 ------
 WEBSITE DATA:
@@ -83,7 +90,8 @@ ${scrapedContent}
 
   const [items, setItems] = useState<ItemType[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [eventStart, setEventStart] = useState<Date | null>(null);
+  const [memoryKv, setMemoryKv] = useState<{ [key: string]: any }>({});
+  
 
   const resetAPIKey = useCallback(() => {
     const apiKey = prompt('OpenAI API Key');
@@ -261,7 +269,107 @@ ${scrapedContent}
 
     client.updateSession({ instructions: instructions });
     client.updateSession({ input_audio_transcription: { model: 'whisper-1' } });
-    client.updateSession({ voice: 'alloy' });
+    client.updateSession({ voice: 'alloy' })
+
+    client.addTool(
+      {
+        name: 'set_memory',
+        description: 'Saves important data about the user into memory.',
+        parameters: {
+          type: 'object',
+          properties: {
+            key: {
+              type: 'string',
+              description:
+                'The key of the memory value. Always use lowercase and underscores, no other characters.',
+            },
+            value: {
+              type: 'string',
+              description: 'Value can be anything represented as a string',
+            },
+          },
+          required: ['key', 'value'],
+        },
+      },
+      async ({ key, value }: { [key: string]: any }) => {
+        setMemoryKv((memoryKv) => {
+          const newKv = { ...memoryKv };
+          newKv[key] = value;
+          return newKv;
+        });
+        return { ok: true };
+      }
+    );
+    client.addTool(
+      {
+        name: 'create_calendar_event',
+        description: 'Creates a new event in Google Calendar',
+        parameters: {
+          type: 'object',
+          properties: {
+            eventName: {
+              type: 'string',
+              description: 'Name/title of the calendar event'
+            },
+            eventDescription: {
+              type: 'string',
+              description: 'Description of the calendar event'
+            },
+            startTime: {
+              type: 'string',
+              description: 'Start time of event in ISO format (e.g. 2024-03-20T15:00:00)'
+            },
+            endTime: {
+              type: 'string',
+              description: 'End time of event in ISO format (e.g. 2024-03-20T16:00:00)'
+            }
+          },
+          required: ['eventName', 'eventDescription', 'startTime', 'endTime']
+        }
+      },
+      async ({ eventName, eventDescription, startTime, endTime }: { [key: string]: string }) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const providerToken = session?.provider_token;
+
+        if (!providerToken) {
+          return { ok: false, error: 'No authentication token found' };
+        }
+
+        const event = {
+          'summary': eventName,
+          'description': eventDescription,
+          'start': {
+            'dateTime': new Date(startTime).toISOString(),
+            'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+          },
+          'end': {
+            'dateTime': new Date(endTime).toISOString(),
+            'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+          }
+        };
+
+        try {
+          const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${providerToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(event)
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to create calendar event');
+          }
+
+          const data = await response.json();
+          return { ok: true, eventId: data.id };
+        } catch (error) {
+          console.error('Error creating calendar event:', error);
+          return { ok: false, error: 'Failed to create calendar event' };
+        }
+      }
+    );
 
     client.on('error', (event: any) => console.error(event));
     client.on('conversation.interrupted', async () => {
@@ -295,10 +403,6 @@ ${scrapedContent}
     };
   }, []);
 
-  // adding event start and end time
-  const [start, setStart] = useState<Date>(new Date());
-  const [end, setEnd] = useState<Date>(new Date());
-
   /**
    * Render the application
    */
@@ -321,99 +425,79 @@ ${scrapedContent}
         </div>
       </div>
       <div className="content-main">
-        <div className="voicechat-section">
-          <div className="content-logs">
-            <div className="content-block events">
-              <div className="visualization">
-                <div className="visualization-entry client">
-                  <canvas ref={clientCanvasRef} />
-                </div>
-                <div className="visualization-entry server">
-                  <canvas ref={serverCanvasRef} />
-                </div>
+        <div className="content-logs">
+          <div className="content-block events">
+            <div className="visualization">
+              <div className="visualization-entry client">
+                <canvas ref={clientCanvasRef} />
               </div>
-            </div>
-            {items.length > 0 && (
-              <div className="content-block conversation">
-                <div className="content-block-body" data-conversation-content>
-                  {items.map((conversationItem, i) => {
-                    return (
-                      <div
-                        className="conversation-item"
-                        key={conversationItem.id}
-                      >
-                        <div className={`speaker ${conversationItem.role || ''}`}>
-                          <div>
-                            {(
-                              conversationItem.role || conversationItem.type
-                            ).replaceAll('_', ' ')}
-                          </div>
-                          <div
-                            className="close"
-                            onClick={() =>
-                              deleteConversationItem(conversationItem.id)
-                            }
-                          >
-                            <X />
-                          </div>
-                        </div>
-                        <div className={`speaker-content`}>
-                          {!conversationItem.formatted.tool &&
-                            conversationItem.role === 'user' && (
-                              <div>
-                                {conversationItem.formatted.transcript ||
-                                  (conversationItem.formatted.audio?.length
-                                    ? '(awaiting transcript)'
-                                    : conversationItem.formatted.text ||
-                                      '(item sent)')}
-                              </div>
-                            )}
-                          {!conversationItem.formatted.tool &&
-                            conversationItem.role === 'assistant' && (
-                              <div>
-                                {conversationItem.formatted.transcript ||
-                                  conversationItem.formatted.text ||
-                                  '(truncated)'}
-                              </div>
-                            )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="visualization-entry server">
+                <canvas ref={serverCanvasRef} />
               </div>
-            )}
-            <div className="content-actions">
-              <Button
-                label={isConnected ? 'Disconnect' : 'Connect'}
-                iconPosition={isConnected ? 'end' : 'start'}
-                icon={isConnected ? X : Zap}
-                buttonStyle={isConnected ? 'regular' : 'action'}
-                onClick={
-                  isConnected ? disconnectConversation : connectConversation
-                }
-              />
             </div>
           </div>
+          {items.length > 0 && (
+            <div className="content-block conversation">
+              <div className="content-block-body" data-conversation-content>
+                {items.map((conversationItem, i) => {
+                  return (
+                    <div
+                      className="conversation-item"
+                      key={conversationItem.id}
+                    >
+                      <div className={`speaker ${conversationItem.role || ''}`}>
+                        <div>
+                          {(
+                            conversationItem.role || conversationItem.type
+                          ).replaceAll('_', ' ')}
+                        </div>
+                        <div
+                          className="close"
+                          onClick={() =>
+                            deleteConversationItem(conversationItem.id)
+                          }
+                        >
+                          <X />
+                        </div>
+                      </div>
+                      <div className={`speaker-content`}>
+                        {!conversationItem.formatted.tool &&
+                          conversationItem.role === 'user' && (
+                            <div>
+                              {conversationItem.formatted.transcript ||
+                                (conversationItem.formatted.audio?.length
+                                  ? '(awaiting transcript)'
+                                  : conversationItem.formatted.text ||
+                                    '(item sent)')}
+                            </div>
+                          )}
+                        {!conversationItem.formatted.tool &&
+                          conversationItem.role === 'assistant' && (
+                            <div>
+                              {conversationItem.formatted.transcript ||
+                                conversationItem.formatted.text ||
+                                '(truncated)'}
+                            </div>
+                          )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div className="content-actions">
+            <Button
+              label={isConnected ? 'Disconnect' : 'Connect'}
+              iconPosition={isConnected ? 'end' : 'start'}
+              icon={isConnected ? X : Zap}
+              buttonStyle={isConnected ? 'regular' : 'action'}
+              onClick={
+                isConnected ? disconnectConversation : connectConversation
+              }
+            />
+          </div>
         </div>
-
-        <div className="event-section"> 
-          <span>Start of your event</span>
-          <DateTimePicker 
-            onChange={(value) => setStart(value || new Date())}
-            value={start}
-          />
-          {/* <span>End of your event</span>
-          <DateTimePicker 
-            onChange={(value) => setEnd(value || new Date())}
-            value={end}
-            format="y-MM-dd h:mm a"
-            clearIcon={null}
-            calendarIcon={null}
-            disableClock={true} */}
-          {/* /> */}
-        </div>
-
       </div>
     </div>
   );

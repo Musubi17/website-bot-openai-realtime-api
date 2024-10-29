@@ -37,63 +37,115 @@
   }
 
   .content-main {
+    max-width: 600px;
+    margin: 0 auto 20px;
+    flex-grow: 1;
+    flex-shrink: 1 !important;
     display: flex;
-    width: 100%;
-    height: 100%;
-    .voicechat-section, .event-section {
-      flex: 1;
-      padding: 20px;
-      box-sizing: border-box;
-    }
-
-    .voicechat-section {
-      border-right: 1px solid #ccc; // Разделительная линия
-    }
-
-    .event-section {
+    overflow: hidden;
+    .content-block {
+      position: relative;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: white;
-
-      p {
-        margin-top: 20px;
+      max-height: 100px;
+      width: 100%;
+      .content-block-title {
+        flex-shrink: 0;
+        padding-top: 16px;
+        padding-bottom: 4px;
+        position: relative;
+      }
+      .content-block-body {
+        color: #6e6e7f;
+        position: relative;
+        flex-grow: 1;
+        padding: 8px 0px;
+        padding-top: 4px;
+        line-height: 1.2em;
+        overflow: auto;
+        &.full {
+          padding: 0px;
+        }
       }
     }
-  }
-
-  .content-logs {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    overflow: hidden;
-    & > div {
+    .content-right {
+      width: 300px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      margin-left: 24px;
+      gap: 24px;
+      & > div {
+        border-radius: 16px;
+        flex-grow: 1;
+        flex-shrink: 0;
+        overflow: hidden;
+        position: relative;
+        .content-block-title {
+          position: absolute;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 2em;
+          top: 16px;
+          left: 16px;
+          padding: 4px 16px;
+          background-color: #fff;
+          border-radius: 1000px;
+          min-height: 32px;
+          z-index: 9999;
+          text-align: center;
+          white-space: pre;
+          &.bottom {
+            top: auto;
+            bottom: 16px;
+            right: 16px;
+          }
+        }
+      }
+      & > div.kv {
+        height: 250px;
+        max-height: 250px;
+        white-space: pre;
+        background-color: #ececf1;
+        .content-block-body {
+          padding: 16px;
+          margin-top: 56px;
+        }
+      }
+    }
+    .content-logs {
       flex-grow: 1;
-    }
-    & > .content-actions {
-      flex-grow: 0;
-      flex-shrink: 0;
       display: flex;
-      align-items: center;
+      flex-direction: column;
       justify-content: center;
-      gap: 16px;
-    }
-    & > div.events {
       overflow: hidden;
-      margin: 0 auto 10px;
-    }
-    .conversation {
-      display: flex;
-      flex-shrink: 0;
-      width: 100%;
-      overflow: hidden;
-      height: 300px;
-      min-height: 0;
-      max-height: 300px;
-      margin: 40px auto;
-      // border-top: 1px solid #e7e7e7;
+      & > div {
+        flex-grow: 1;
+      }
+      & > .content-actions {
+        flex-grow: 0;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+      }
+      & > div.events {
+        overflow: hidden;
+        margin: 0 auto 10px;
+      }
+      .conversation {
+        display: flex;
+        flex-shrink: 0;
+        width: 100%;
+        overflow: hidden;
+        height: 300px;
+        min-height: 0;
+        max-height: 300px;
+        margin: 40px auto;
+        // border-top: 1px solid #e7e7e7;
+      }
     }
   }
 

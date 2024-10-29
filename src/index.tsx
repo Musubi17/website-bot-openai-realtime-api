@@ -7,7 +7,6 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 
 
-
 const supabase = createClient(
   'https://rwpxmfuxmyjhsxjersgk.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3cHhtZnV4bXlqaHN4amVyc2drIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjk2ODc4MTUsImV4cCI6MjA0NTI2MzgxNX0.ZC-U9UWZdp8kK_r5dvJ1qaRkPxKKNJbUWQFp8vpmXm0'
