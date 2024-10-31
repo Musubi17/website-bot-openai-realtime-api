@@ -43,6 +43,19 @@ INSTRUCTIONS:
 - Double check all calendar dates and days of the week before confirming them
 - If user mentions a day of week (like "Saturday"), calculate the exact date for the nearest occurrence of that day
 
+CALENDAR CAPABILITIES:
+- You can check user's calendar using the check_calendar function
+- You can update existing calendar events using update_calendar_event function
+- You can delete calendar events using delete_calendar_event function
+- For deleting events, you need the event ID (you can get it from check_calendar)
+- Always confirm with the user before deleting any events
+- After deletion, inform the user that the event has been removed
+
+EXAMPLES:
+- For "delete my meeting tomorrow": first check_calendar to find the event, then use delete_calendar_event
+- For "cancel next week's appointment": first check_calendar to find the event, then use delete_calendar_event
+- Always confirm: "I found the meeting [meeting name]. Would you like me to delete it?"
+
 ------
 PERSONALITY:
 - Be upbeat and genuine
@@ -53,6 +66,31 @@ PERSONALITY:
 WEBSITE DATA:
 
 ${scrapedContent}
+
+TASK CAPABILITIES:
+- You can create tasks using create_task_event function
+- Tasks are different from regular calendar events:
+  * They are all-day events
+  * They have priority levels (high, medium, low)
+  * They are marked as "free" time in calendar
+  * They include a status indicator
+- When creating tasks, always:
+  * Ask for priority if not specified
+  * Set appropriate due date
+  * Add relevant description if provided
+  * Use emoji indicators for better visibility
+
+EXAMPLES OF TASK CREATION:
+- "Create a task to review project proposal by Friday" 
+- "Add a high priority task to submit report"
+- "Remind me to call John next week"
+- "Set a task for grocery shopping tomorrow"
+
+TASK FORMATTING:
+- High priority tasks: 🔴
+- Medium priority tasks: 🟡
+- Low priority tasks: 🟢
+- Status indicator: ⬜ (not completed)
 `;
 
   /**
@@ -367,6 +405,368 @@ ${scrapedContent}
         } catch (error) {
           console.error('Error creating calendar event:', error);
           return { ok: false, error: 'Failed to create calendar event' };
+        }
+      }
+    );
+    client.addTool(
+      {
+        name: 'check_calendar',
+        description: 'Check Google Calendar for events within a specified time range',
+        parameters: {
+          type: 'object',
+          properties: {
+            start_time: {
+              type: 'string',
+              description: 'Start time in ISO format (e.g., "2023-04-20T09:00:00-07:00")'
+            },
+            end_time: {
+              type: 'string',
+              description: 'End time in ISO format (e.g., "2023-04-20T17:00:00-07:00")'
+            }
+          },
+          required: ['start_time', 'end_time']
+        }
+      },
+      async ({ start_time, end_time }: { start_time: string; end_time: string }) => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const providerToken = session?.provider_token;
+
+          if (!providerToken) {
+            return { ok: false, error: 'No authentication token found' };
+          }
+
+          const response = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
+            new URLSearchParams({
+              timeMin: new Date(start_time).toISOString(),
+              timeMax: new Date(end_time).toISOString(),
+              singleEvents: 'true',
+              orderBy: 'startTime'
+            }),
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${providerToken}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch calendar events');
+          }
+
+          const data = await response.json();
+          const events = data.items || [];
+
+          console.debug(`Found ${events.length} events in the calendar`);
+          console.debug('Events:', events);
+
+          return { 
+            ok: true, 
+            events: events.map((event: any) => ({
+              id: event.id,
+              summary: event.summary,
+              start: event.start.dateTime || event.start.date,
+              end: event.end.dateTime || event.end.date,
+              description: event.description
+            }))
+          };
+
+        } catch (error) {
+          console.error('Error checking calendar:', error);
+          return { ok: false, error: 'Failed to check calendar events' };
+        }
+      }
+    );
+    client.addTool(
+      {
+        name: 'update_calendar_event',
+        description: 'Update an existing Google Calendar event',
+        parameters: {
+          type: 'object',
+          properties: {
+            event_id: {
+              type: 'string',
+              description: 'ID of the event to update'
+            },
+            summary: {
+              type: 'string',
+              description: 'New event title'
+            },
+            start_time: {
+              type: 'string',
+              description: 'New start time in ISO format'
+            },
+            end_time: {
+              type: 'string',
+              description: 'New end time in ISO format'
+            },
+            description: {
+              type: 'string',
+              description: 'New event description'
+            }
+          },
+          required: ['event_id']
+        }
+      },
+      async ({ 
+        event_id, 
+        summary, 
+        start_time, 
+        end_time, 
+        description 
+      }: { 
+        event_id: string;
+        summary?: string;
+        start_time?: string;
+        end_time?: string;
+        description?: string;
+      }) => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const providerToken = session?.provider_token;
+
+          if (!providerToken) {
+            return { ok: false, error: 'No authentication token found' };
+          }
+
+          // Сначала получаем текущее событие
+          const getResponse = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${event_id}`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${providerToken}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          if (!getResponse.ok) {
+            throw new Error('Failed to fetch event');
+          }
+
+          const currentEvent = await getResponse.json();
+
+          // Обновляем только предоставленные поля
+          const updatedEvent = {
+            ...currentEvent,
+            ...(summary && { summary }),
+            ...(description && { description }),
+            ...(start_time && {
+              start: {
+                dateTime: new Date(start_time).toISOString(),
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+              }
+            }),
+            ...(end_time && {
+              end: {
+                dateTime: new Date(end_time).toISOString(),
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+              }
+            })
+          };
+
+          // Отправляем обновленное событие
+          const updateResponse = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${event_id}`,
+            {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${providerToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(updatedEvent)
+            }
+          );
+
+          if (!updateResponse.ok) {
+            throw new Error('Failed to update event');
+          }
+
+          const result = await updateResponse.json();
+          console.debug('Event updated:', result);
+
+          return { 
+            ok: true, 
+            updated_event: {
+              id: result.id,
+              summary: result.summary,
+              start: result.start.dateTime || result.start.date,
+              end: result.end.dateTime || result.end.date,
+              description: result.description
+            }
+          };
+
+        } catch (error) {
+          console.error('Error updating calendar event:', error);
+          return { ok: false, error: 'Failed to update calendar event' };
+        }
+      }
+    );
+    client.addTool(
+      {
+        name: 'delete_calendar_event',
+        description: 'Delete a Google Calendar event',
+        parameters: {
+          type: 'object',
+          properties: {
+            event_id: {
+              type: 'string',
+              description: 'ID of the event to delete'
+            }
+          },
+          required: ['event_id']
+        }
+      },
+      async ({ event_id }: { event_id: string }) => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const providerToken = session?.provider_token;
+
+          if (!providerToken) {
+            return { ok: false, error: 'No authentication token found' };
+          }
+
+          const response = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${event_id}`,
+            {
+              method: 'DELETE',
+              headers: {
+                'Authorization': `Bearer ${providerToken}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error('Failed to delete event');
+          }
+
+          console.debug('Event deleted:', event_id);
+
+          return { 
+            ok: true, 
+            status: 'success',
+            message: `Event with ID ${event_id} has been deleted`
+          };
+
+        } catch (error) {
+          console.error('Error deleting calendar event:', error);
+          return { ok: false, error: 'Failed to delete calendar event' };
+        }
+      }
+    );
+    client.addTool(
+      {
+        name: 'create_task_event',
+        description: 'Creates a new task event in Google Calendar',
+        parameters: {
+          type: 'object',
+          properties: {
+            task_name: {
+              type: 'string',
+              description: 'Name/title of the task'
+            },
+            due_date: {
+              type: 'string',
+              description: 'Due date for the task in ISO format (e.g. 2024-03-20)'
+            },
+            description: {
+              type: 'string',
+              description: 'Description or details of the task'
+            },
+            priority: {
+              type: 'string',
+              description: 'Priority level (high, medium, low)',
+              enum: ['high', 'medium', 'low']
+            }
+          },
+          required: ['task_name', 'due_date']
+        }
+      },
+      async ({ 
+        task_name, 
+        due_date, 
+        description = '', 
+        priority = 'medium' 
+      }: { 
+        task_name: string;
+        due_date: string;
+        description?: string;
+        priority?: 'high' | 'medium' | 'low';
+      }) => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const providerToken = session?.provider_token;
+
+          if (!providerToken) {
+            return { ok: false, error: 'No authentication token found' };
+          }
+
+          // Создаем emoji индикатор приоритета
+          const priorityEmoji = {
+            high: '🔴',
+            medium: '🟡',
+            low: '🟢'
+          }[priority];
+
+          const event = {
+            'summary': `${priorityEmoji} Task: ${task_name}`,
+            'description': `${description}\n\nPriority: ${priority}\nStatus: ⬜ Not completed`,
+            'start': {
+              'date': due_date.split('T')[0], // Берем только дату без времени
+              'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            'end': {
+              'date': due_date.split('T')[0],
+              'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            'transparency': 'transparent', // Показывает как "свободен" в календаре
+            'extendedProperties': {
+              'private': {
+                'type': 'task',
+                'priority': priority,
+                'status': 'not_completed'
+              }
+            }
+          };
+
+          const response = await fetch(
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${providerToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(event)
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error('Failed to create task event');
+          }
+
+          const data = await response.json();
+          console.debug('Task created:', data);
+
+          return { 
+            ok: true, 
+            task: {
+              id: data.id,
+              summary: data.summary,
+              due_date: data.start.date,
+              description: data.description,
+              priority: priority
+            }
+          };
+
+        } catch (error) {
+          console.error('Error creating task event:', error);
+          return { ok: false, error: 'Failed to create task event' };
         }
       }
     );
