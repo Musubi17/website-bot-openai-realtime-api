@@ -63,34 +63,6 @@ function App() {
     }
   }, [session]);
 
-  async function createCalendarEvent() {
-    console.log('Creating calendar event')
-    const event = {
-      'summary': eventName,
-      'description': eventDescription,
-      'start': {
-        'dateTime': start.toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      'end': {
-        'dateTime': end.toISOString(),
-        'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone
-      }
-    }
-    await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + session?.provider_token,
-      },
-      body: JSON.stringify(event)
-    }).then((data) => {
-      return data.json();
-    }).then((data) => {
-      console.log(data);
-      alert('Event created successfully, check your Google Calendar!');
-    })
-  }
-
 
   return ( 
     <div className="app-container">
@@ -104,44 +76,7 @@ function App() {
             <div className="content">
               <ScrapeForm onScrapedContent={handleScrapedContent} userEmail={userEmail}/>
             </div>
-
-            <div className="event-section"> 
-              <p>Start of your event</p>
-              <DateTimePicker 
-                onChange={(value) => setStart(value || new Date())}
-                value={start}
-                format="dd/MM/y h:mm a"
-                disableClock={true}
-                clearIcon={null}
-                calendarIcon={null}
-                locale="en-US"
-                minDate={new Date()}
-                required={true}
-                className="custom-datetime-picker"
-                />
-
-              <p>End of your event</p>
-              <DateTimePicker 
-                onChange={(value) => setEnd(value || new Date())}
-                value={end}
-                format="dd/MM/y h:mm a"
-                disableClock={true}
-                clearIcon={null}
-                calendarIcon={null}
-                locale="en-US"
-                minDate={new Date()}
-                required={true}
-                className="custom-datetime-picker"
-                />
-              <p>Event Name</p>
-              <input type="text" onChange={(e) => setEventName(e.target.value)} />
-              <p>Event Description</p>
-              <input type="text" onChange={(e) => setEventDescription(e.target.value)} /> 
-
-              <div style={{ height: 20}}></div>
-              
-              <button onClick={(e) => createCalendarEvent()}>Create Event</button>
-            </div>
+            
             <div style={{ height: 40}}></div>
             <div className="sign-out-button-container">
               <button onClick={signOut} className="sign-out-button">Sign Out</button>
